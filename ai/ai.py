@@ -6,7 +6,7 @@ import requests
 import os
 import json
 
-from helper import loadDotEnv
+from utils.dotenvLoader import loadDotEnv
 loadDotEnv()
 
 
