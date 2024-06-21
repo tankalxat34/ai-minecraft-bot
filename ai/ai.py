@@ -16,14 +16,33 @@ def getIAMToken(oauthToken: str = str(os.environ.get("YAGPT_OAUTH_TOKEN"))) -> d
     })
     return r.json()
 
+def createRequestBody(model_uri: str, stream: bool, temperature: float, maxTokens: int, messages: list) -> dict:
+    """Создает тело для POST запроса к нейронной сети
+
+    Returns:
+        dict: Словарь, являющийся JSON телом запроса
+    """
+    return {
+        "modelUri": model_uri,
+        "completionOptions": {
+            "stream": stream,
+            "temperature": temperature,
+            "maxTokens": f"{maxTokens}"
+        },
+        "messages": messages
+    }
+
 
 
 class AiSession:
     def __init__(self, 
+                # авторизация
                 folder_id: str, 
                 iam_token: str, 
+                # имя бота в игре
+                name: str,
                 model: str = "yandexgpt",
-                data_logging_enabled: bool = True,
+                data_logging_enabled: bool = False,
                 
                 stream: bool = False, 
                 temperature: float = 0.1, 
@@ -31,19 +50,20 @@ class AiSession:
                 
                 generation_segment: str | None = None,
                 
-                systemPrompt: str = f"Ты - эксперт по игре Minecraft. Тебя зовут {os.environ.get("BOT_USERNAME")}. Свой пол определи в зависимости от твоего имени. Все свои сообщения ты пишешь в чат внутри игры Minecraft. Не используй разметку Markdown! Отвечай, словно ты настоящий человек и игрок в Minecraft."):
+                systemPrompt: str = "Ты - эксперт по игре Minecraft. Тебя зовут {name}. Ты находишься внутри игры Minecraft. Свой пол определи в зависимости от твоего имени. Все свои сообщения ты пишешь в чат внутри игры Minecraft игроку. Не используй разметку Markdown! Отвечай, словно ты настоящий человек. Ты дружелюбен и приветлив."):
         """Инициализирует возможность общаться с нейронной сетью YaGPT. Подробнее читайте [здесь](https://yandex.cloud/ru/docs/foundation-models/operations/yandexgpt/create-prompt)
 
         Args:
             folder_id (str): идентификатор каталога, на который у вашего аккаунта есть роль ai.languageModels.user или выше.
             iam_token (str): IAM-токен, полученный перед началом работы.
+            name (str): Имя бота в игре.
             model (str, optional): Наименование языковой модели. Defaults to "yandexgpt".
             data_logging_enabled (bool, optional): Определяет, будут ли сообщения логироваться на строне Яндекса. Defaults to True.
             stream (bool, optional): включает потоковую передачу частично сгенерированного текста. Принимает значения true или false. Defaults to False.
             temperature (float, optional): чем выше значение этого параметра, тем более креативными и случайными будут ответы модели. Принимает значения от 0 (включительно) до 1 (включительно). Defaults to 0.1.
             maxTokens (int, optional): устанавливает ограничение на выход модели в токенах. Максимальное число токенов генерации зависит от модели. Подробнее см. в разделе Квоты и лимиты в Yandex Foundation Models. Defaults to 1000.
             generation_segment (str | None, optional): Сегменты `/latest`, `/rc` и `/deprecated` указывают версию модели. Defaults to None.
-            systemPrompt (str, optional): позволяет задать контекст запроса и определить поведение модели. Defaults to f"Ты - эксперт по игре Minecraft. Тебя зовут {os.environ.get("BOT_USERNAME")}. Все свои сообщения ты пишешь в чат внутри игры Minecraft. Не используй разметку Markdown! Отвечай, словно ты настоящий человек и игрок в Minecraft.".
+            systemPrompt (str, optional): позволяет задать контекст запроса и определить поведение модели.
         """
         
         self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
@@ -56,9 +76,10 @@ class AiSession:
         self.temperature: float = temperature
         self.maxTokens: int = maxTokens
         self.generation_segment: str | None = generation_segment
+        self.name: str = name
         
-        self.systemPrompt = systemPrompt
-        self.messages = [self._createMessageBody(systemPrompt, "system")]
+        self.systemPrompt = systemPrompt.format(name=self.name)
+        self.messages = [self._createMessageBody(self.systemPrompt, "system")]
         self.completion = None
     
     def _appendMessage(self, text: str, role: str = "user") -> list[dict]:
@@ -74,16 +95,22 @@ class AiSession:
         self.messages.append(self._createMessageBody(text, role))
         return self.messages
         
-    def _createRequestBody(self) -> dict:
-        return {
-            "modelUri": self.model_uri,
-            "completionOptions": {
-                "stream": self.stream,
-                "temperature": self.temperature,
-                "maxTokens": f"{self.maxTokens}"
-            },
-            "messages": self.messages
-        }
+    def _createRequestBody(self, useChatHistory: bool = True) -> dict:
+        """Создать тело для POST запроса на сервер
+
+        Args:
+            useChatHistory (bool, optional): Использовать ли историю чата для сохранения контекста беседы. Defaults to True.
+
+        Returns:
+            dict: Словарь-тело для запроса
+        """
+        return createRequestBody(
+            model_uri=self.model_uri,
+            maxTokens=self.maxTokens,
+            messages=self.messages if useChatHistory else [self._createMessageBody(self.systemPrompt, "system")],
+            stream=self.stream,
+            temperature=self.temperature,
+        )
     
     def _createMessageBody(self, text: str, role: str = "user") -> dict:
         return {
@@ -91,11 +118,35 @@ class AiSession:
             "text": text
         }
     
-    def ask(self, messageText: str, typeUser: str = "user") -> str:
-        message_body = self._createMessageBody(messageText, typeUser)
-        self.messages.append(message_body)
+    def _createSystemMessageBody(self) -> dict:
+        """Создает системное сообщение. Такое сообщение должно быть начальным в истории чата и задавать контекст для дальнейшей
+        беседы
+
+        Returns:
+            dict: Словарь-тело для системного сообщения
+        """
+        return self._createMessageBody(self.systemPrompt, "system")
         
-        request_body = self._createRequestBody()
+    def clearChatHistory(self):
+        """Очищает историю сообщений
+        """
+        self.messages.clear()
+        self._appendMessage(*self._createSystemMessageBody())
+    
+    def ask(self, messageText: str, typeUser: str = "user", useChatHistory: bool = True) -> str:
+        """Выполнить запрос к нейросети YaGPT
+
+        Args:
+            messageText (str): Текст сообщения для выполнения запроса
+            typeUser (str, optional): Тип пользователя. Defaults to "user".
+            useChatHistory (bool, optional): Сделать запрос с учетом истории предыдущих сообщений. Если `False` - отправленное сообщение будет считаться первым в диалоге. Defaults to True.
+
+        Returns:
+            str: Строка с ответом нейронной сети
+        """
+        self._appendMessage(messageText, typeUser)
+        request_body: dict = self._createRequestBody(useChatHistory)
+
         r = requests.post(self.api_url, json=request_body, headers={
             "Authorization": f"Bearer {self.iam_token}",
             "Content-Type": "application/json",
