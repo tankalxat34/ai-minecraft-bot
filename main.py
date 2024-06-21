@@ -19,7 +19,11 @@ bot = mineflayer.createBot({
 
 bot.loadPlugin(pathfinder.pathfinder)
 
-openaiSession = ai.Session()
+aisession = ai.AiSession(
+    folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
+    iam_token=ai.getIAMToken()["iamToken"]
+)
+
 
 @On(bot, "spawn")
 def spawnHandler(*args):
@@ -35,10 +39,9 @@ def spawnHandler(*args):
     def msgHandler(this, user: str, message: str, *args):
         if user != os.environ.get("BOT_USERNAME"):
             bot.chat("Думаю над ответом...")
-            ai_model_response = openaiSession.ask(message).choices[0].message
-            print(ai_model_response)
-            bot.chat(str(ai_model_response))
-            
+            r = aisession.ask(message)
+            print(r)
+            bot.chat(f"{r}")
             
 
         # if user != os.environ.get("BOT_USERNAME"):

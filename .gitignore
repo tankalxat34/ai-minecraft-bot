@@ -54,3 +54,4 @@ python-env-tools/**
 .env
 *.pyc
 venv
+test*

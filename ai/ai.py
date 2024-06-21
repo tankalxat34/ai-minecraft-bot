@@ -1,45 +1,64 @@
 """
-OpenAI functionality to play in Minecraft
+AI functionality to play in Minecraft
 """
 
+import requests
 import os
-from openai import OpenAI
+import json
 
 from helper import loadDotEnv
 loadDotEnv()
 
 
-client = OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY")
-)
+def getIAMToken(oauthToken: str = str(os.environ.get("YAGPT_OAUTH_TOKEN"))) -> dict[str, str]:
+    r = requests.post("https://iam.api.cloud.yandex.net/iam/v1/tokens", json={
+        "yandexPassportOauthToken": oauthToken
+    })
+    return r.json()
 
 
-class Session:
-    def __init__(self, model: str = "gpt-3.5-turbo", systemPrompt: str = "You are expert and you are inside the minecraft game"):
-        self.messages = [
-            # {"role": "system", "content": "You are expert and you are inside the minecraft game. You can interact with the world of minecraft through the Python language using the `mineflayer` library as well as the 'mineflayer-pathfinder` plugin.  When you receive a task to perform an action in a chat, you must issue Python code using this library that performs the specified action."},
-            {"role": "system", "content": systemPrompt},
-        ]
+
+class AiSession:
+    def __init__(self, folder_id: str, iam_token: str, model: str = "yandexgpt-lite", systemPrompt: str = "Ты - эксперт по игре Minecraft"):
+        self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+        self.model_uri = f"gpt://{folder_id}/{model}"
         
+        self.folder_id = folder_id
+        self.iam_token = iam_token
+        
+        self.systemPrompt = systemPrompt
+        self.messages = [self._createMessageBody(systemPrompt, "system")]
         self.completion = None
     
-    def _createMessage(self, text: str, role: str = "user") -> dict:
+    def _createRequestBody(self, stream: bool = False, temperature: float = 0.1, maxTokens: int = 1000) -> dict:
+        return {
+            "modelUri": self.model_uri,
+            "completionOptions": {
+                "stream": stream,
+                "temperature": temperature,
+                "maxTokens": f"{maxTokens}"
+            },
+            "messages": self.messages
+        }
+    
+    def _createMessageBody(self, text: str, role: str = "user") -> dict:
         return {
             "role": role,
             "text": text
         }
     
-    def ask(self, messageText: str, typeUser: str = "user"):
-        """
-        Use `$.choices[0].message`
-        """
-        self.messages.append(self._createMessage(messageText, typeUser))
+    def ask(self, messageText: str, typeUser: str = "user", *args, **kwargs) -> str:
+        self.messages.append(self._createMessageBody(messageText, typeUser))
         
-        self.completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=self.messages
-        )
+        r = requests.post(self.api_url, json=self._createRequestBody(**kwargs), headers={
+            "Authorization": f"Bearer {self.iam_token}",
+            "Content-Type": "application/json",
+            "x-folder-id": f"{self.folder_id}"
+        })
         
-        # completion.choices[0].message
-        return self.completion
+        if r.status_code:
+            return r.json()["result"]["alternatives"][0]["message"]["text"]
+        else:
+            return "!Ошибка в языковой модели"
+
 
