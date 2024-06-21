@@ -21,7 +21,8 @@ bot.loadPlugin(pathfinder.pathfinder)
 
 aisession = ai.AiSession(
     folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
-    iam_token=ai.getIAMToken()["iamToken"]
+    iam_token=ai.getIAMToken()["iamToken"],
+    generation_segment="latest"
 )
 
 
@@ -37,10 +38,9 @@ def spawnHandler(*args):
 
     @On(bot, 'chat')
     def msgHandler(this, user: str, message: str, *args):
-        if user != os.environ.get("BOT_USERNAME"):
-            bot.chat("Думаю над ответом...")
+        if user != os.environ.get("BOT_USERNAME") and message[0] != "/":
+            # bot.chat("Думаю над ответом...")
             r = aisession.ask(message)
-            print(r)
             bot.chat(f"{r}")
             
 
