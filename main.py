@@ -22,6 +22,8 @@ bot.loadPlugin(pathfinder.pathfinder)
 aisession = ai.AiSession(
     folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
     iam_token=ai.getIAMToken()["iamToken"],
+    temperature=0.6,
+    maxTokens=2000,
     generation_segment="latest"
 )
 

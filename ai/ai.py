@@ -49,18 +49,31 @@ class AiSession:
         self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
         self.model_uri = f"gpt://{folder_id}/{model}/{generation_segment}" if generation_segment else f"gpt://{folder_id}/{model}"
         
-        self.folder_id = folder_id
-        self.iam_token = iam_token
-        self.data_logging_enabled = data_logging_enabled
-        self.stream = stream
-        self.temperature = temperature
-        self.maxTokens = maxTokens
-        self.generation_segment = generation_segment
+        self.folder_id: str = folder_id
+        self.iam_token: str = iam_token
+        self.data_logging_enabled: bool = data_logging_enabled
+        self.stream: bool = stream
+        self.temperature: float = temperature
+        self.maxTokens: int = maxTokens
+        self.generation_segment: str | None = generation_segment
         
         self.systemPrompt = systemPrompt
         self.messages = [self._createMessageBody(systemPrompt, "system")]
         self.completion = None
     
+    def _appendMessage(self, text: str, role: str = "user") -> list[dict]:
+        """Сохраняет сообщение в историю чата
+
+        Args:
+            text (str): Текст сообщения
+            role (str, optional): Роль автора сообщения: `user`, `system` или `assistant`. Defaults to "user".
+
+        Returns:
+            list[dict]: Список словарей, содержащих текст сообщения и роль автора сообщения
+        """
+        self.messages.append(self._createMessageBody(text, role))
+        return self.messages
+        
     def _createRequestBody(self) -> dict:
         return {
             "modelUri": self.model_uri,
@@ -78,10 +91,12 @@ class AiSession:
             "text": text
         }
     
-    def ask(self, messageText: str, typeUser: str = "user", *args, **kwargs) -> str:
-        self.messages.append(self._createMessageBody(messageText, typeUser))
+    def ask(self, messageText: str, typeUser: str = "user") -> str:
+        message_body = self._createMessageBody(messageText, typeUser)
+        self.messages.append(message_body)
         
-        r = requests.post(self.api_url, json=self._createRequestBody(**kwargs), headers={
+        request_body = self._createRequestBody()
+        r = requests.post(self.api_url, json=request_body, headers={
             "Authorization": f"Bearer {self.iam_token}",
             "Content-Type": "application/json",
             "x-folder-id": f"{self.folder_id}",
@@ -89,9 +104,11 @@ class AiSession:
         })
         
         if r.status_code:
-            print("REQUEST:", )
-            print(json.dumps(r.json(), indent=4))
-            return r.json()["result"]["alternatives"][0]["message"]["text"]
+            print("\n\n\nREQUEST:", json.dumps(request_body, indent=4))
+            print("RESPONSE:", json.dumps(r.json(), indent=2))
+            response_message = r.json()["result"]["alternatives"][0]["message"]["text"]
+            self._appendMessage(response_message, "assistant")
+            return response_message
         else:
             return "!Ошибка в языковой модели"
 
