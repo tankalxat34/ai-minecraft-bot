@@ -8,6 +8,7 @@ import requests
 import os
 import json
 
+from ai import prompts
 from utils.dotenvLoader import loadDotEnv
 loadDotEnv()
 
@@ -76,7 +77,7 @@ class AiSession:
                 
                 generation_segment: str | None = None,
                 
-                systemPrompt: str = "Ты - эксперт по игре Minecraft. Тебя зовут {name}. Ты находишься внутри игры Minecraft. Свой пол определи в зависимости от твоего имени. Все свои сообщения ты пишешь в чат внутри игры Minecraft игроку. Не используй разметку Markdown! Отвечай, словно ты настоящий человек. Ты дружелюбен и приветлив. Кроме вопросов я могу отдавать тебе команды сделать действие. Реагируй на такие сообщения не задавая вопросов. Твоя реакция должна быть покладистой и послушной."):
+                systemPrompt: str = prompts.Prompts.SYSTEM_PROMPT):
         """Инициализирует возможность общаться с нейронной сетью YaGPT. Подробнее читайте [здесь](https://yandex.cloud/ru/docs/foundation-models/operations/yandexgpt/create-prompt)
 
         Args:

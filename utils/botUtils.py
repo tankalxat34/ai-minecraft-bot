@@ -17,6 +17,13 @@ def findByBestItem(slots: list[dict], fieldByMax: str, fieldByName: str = "") ->
     return item
 
 
+class CommandsComparator:
+    def __init__(self, actionMap: dict[str, function], disableAi: bool = False) -> None:
+        self.actionMap = actionMap
+        self.disableAi = disableAi
+        
+
+
 class BotActions:
     def __init__(self, bot, movements):
         """Дополнительные методы для управления ботом

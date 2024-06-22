@@ -56,18 +56,22 @@ def spawnHandler(*args):
 
     @On(bot, "whisper")
     def whisperHandler(this, username: str, message: str, *args):
+        """
+        чтобы не делать кучу запросов в нейросеть для сравнения слов в каждом кейсе, сделаем так
+            в промпте напишем список пар слов, которые надо сравнить друг с другом
+            слова слева - сообщение игрока. слова справа - заготовленные в скрипте слова
+            та пара слов, смысл которых совпадет наибольшим образом, вызывает соответствующее действие для бота
+            
+            попросим нейросеть вернуть массив с процентами совпадения смысла для каждой пары слов
+            максимальное число в полученном массиве определит кейс и, соотв. действие, которое будет вызвано
+            
         match message.lower():
             case "стоп":
-                """Останаливает выполнение всех действий
-                """
                 botActions.reset()
                 
-                bot.whisper(username, "Есть остановиться!")
-
             case "за мной":
                 botActions.reset()
                 
-                bot.whisper(username, "Уже иду!")
                 player = bot.players[username]
                 target = player.entity
                 
@@ -75,13 +79,17 @@ def spawnHandler(*args):
                 bot.pathfinder.setGoal(pathfinder.goals.GoalFollow(target, 1), True)
                 
             case _:
-                # запрос в YaGPT, если не включена опция `disableAi`
-                if CMD.getOption("disableAi"):
-                    bot.chat("При запуске бота Вы отключили запросы к YandexGPT, указав необязательную опцию --disableAi.\n\nПожалуйста, перезапустите бота без использования этой опции")
-                else:
-                    try:
-                        r = aisession.ask(message)
-                        bot.whisper(username, f"{r}")
-                    except Exception as e:
-                        print(e)
-                        bot.whisper(username, "Прости, не могу тебе ответить")
+                pass
+        """
+        
+            
+        # запрос в YaGPT, если не включена опция `disableAi`
+        if CMD.getOption("disableAi"):
+            bot.chat("При запуске бота Вы отключили запросы к YandexGPT, указав необязательную опцию --disableAi.\n\nПожалуйста, перезапустите бота без использования этой опции")
+        else:
+            try:
+                r = aisession.ask(message)
+                bot.whisper(username, f"{r}")
+            except Exception as e:
+                print(e)
+                bot.whisper(username, "Прости, не могу тебе ответить")
