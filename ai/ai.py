@@ -32,6 +32,12 @@ def createRequestBody(model_uri: str, stream: bool, temperature: float, maxToken
         "messages": messages
     }
 
+def createMessageBody(self, text: str, role: str = "user") -> dict:
+    return {
+        "role": role,
+        "text": text
+    }
+
 
 
 class AiSession:
@@ -113,10 +119,7 @@ class AiSession:
         )
     
     def _createMessageBody(self, text: str, role: str = "user") -> dict:
-        return {
-            "role": role,
-            "text": text
-        }
+        return createMessageBody(text, role)
     
     def _createSystemMessageBody(self) -> dict:
         """Создает системное сообщение. Такое сообщение должно быть начальным в истории чата и задавать контекст для дальнейшей
@@ -155,8 +158,6 @@ class AiSession:
         })
         
         if r.status_code:
-            print("\n\n\nREQUEST:", json.dumps(request_body, indent=4))
-            print("RESPONSE:", json.dumps(r.json(), indent=2))
             response_message = r.json()["result"]["alternatives"][0]["message"]["text"]
             self._appendMessage(response_message, "assistant")
             return response_message

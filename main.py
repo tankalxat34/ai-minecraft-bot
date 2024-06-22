@@ -4,6 +4,7 @@ from javascript import require, On
 
 from utils.dotenvLoader import loadDotEnv
 from utils import cli
+from utils.botUtils import BotActions, BotInventory
 from ai import ai
 
 loadDotEnv()
@@ -21,9 +22,15 @@ bot = mineflayer.createBot({
     "version": os.environ.get("VERSION") or CMD.getOption("version") or CMD.getOption("v") or "1.20.4"
 })
 
-MC_DATA = require("minecraft-data")(bot.version)
+mcData = require("minecraft-data")(bot.version)
 
 bot.loadPlugin(pathfinder.pathfinder)
+movements = pathfinder.Movements(bot, mcData)
+movements.canDig = False
+
+botActions = BotActions(bot, movements)
+botInventory = BotInventory(bot, mcData)
+
 
 if not CMD.getOption("disableAi"):
     aisession = ai.AiSession(
@@ -36,60 +43,45 @@ if not CMD.getOption("disableAi"):
     )
 else:
     print("AI отключен")
-    
+
+
+
 
 @On(bot, "spawn")
 def spawnHandler(*args):
-
-    movements = pathfinder.Movements(bot, MC_DATA)
-
     @On(bot, "chat")
     def chatHandler(this, username: str, message: str, *args):
         if username != USERNAME:
-            bot.whisper(username, f"Не люблю общаться в общем чате. Напиши мне командой `/tell {USERNAME} <твое_сообщение>` и тогда я смогу помочь!")
+            bot.whisper(username, f"Напиши мне командой `/tell {USERNAME} <твое_сообщение>` и тогда я смогу помочь!")
 
     @On(bot, "whisper")
     def whisperHandler(this, username: str, message: str, *args):
         match message.lower():
-            case "за мной":
-                bot.pathfinder.stop()
-                bot.pathfinder.setMovements(movements)
+            case "стоп":
+                """Останаливает выполнение всех действий
+                """
+                botActions.reset()
                 
+                bot.whisper(username, "Есть остановиться!")
+
+            case "за мной":
+                botActions.reset()
                 
                 bot.whisper(username, "Уже иду!")
                 player = bot.players[username]
                 target = player.entity
                 
+                bot.pathfinder.setMovements(movements)
                 bot.pathfinder.setGoal(pathfinder.goals.GoalFollow(target, 1), True)
-            case "стоп":
-                bot.pathfinder.stop()
-                bot.pathfinder.setMovements(movements)
                 
-                bot.whisper(username, "Есть остановиться!")
-                # bot.whisper(username, "Остановился")
-                # bot.whisper(username, aisession.ask(f"Ответ на это сообщение ниже пожалуйста сгенерируй исходя из того, что ты прекратил выполнять какие то действия внутри Minecraft:\n\n{message}"))
-            case "алмазы":
-                bot.pathfinder.stop()
-                bot.pathfinder.setMovements(movements)
-                
-                block = bot.findBlock({
-                    "matching": MC_DATA.blocksByName.diamond_ore.id,
-                    "maxDistance": 256
-                })
-                print(block.position)
-                if not block:
-                    bot.whisper(username, "Не нашел алмазной руды!")
-                else:
-                    bot.pathfinder.setGoal(pathfinder.goals.GoalBlock(block.position.x, block.position.y + 1, block.position.z), True)
             case _:
-                # запрос в YaGPT, если не включена опция об отключении AI
+                # запрос в YaGPT, если не включена опция `disableAi`
                 if CMD.getOption("disableAi"):
-                    bot.whisper(username, "Типа сделан запрос в YaGPT")
+                    bot.chat("При запуске бота Вы отключили запросы к YandexGPT, указав необязательную опцию --disableAi.\n\nПожалуйста, перезапустите бота без использования этой опции")
                 else:
                     try:
                         r = aisession.ask(message)
                         bot.whisper(username, f"{r}")
                     except Exception as e:
                         print(e)
-                        bot.whisper(username, "Прости, я задумался и забыл, что хотел тебе ответить")
-
+                        bot.whisper(username, "Прости, не могу тебе ответить")
