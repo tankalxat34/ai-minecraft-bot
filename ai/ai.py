@@ -2,6 +2,8 @@
 AI functionality to play in Minecraft
 """
 
+from datetime import datetime, timezone
+import pathlib
 import requests
 import os
 import json
@@ -10,11 +12,29 @@ from utils.dotenvLoader import loadDotEnv
 loadDotEnv()
 
 
-def getIAMToken(oauthToken: str = str(os.environ.get("YAGPT_OAUTH_TOKEN"))) -> dict[str, str]:
-    r = requests.post("https://iam.api.cloud.yandex.net/iam/v1/tokens", json={
-        "yandexPassportOauthToken": oauthToken
-    })
-    return r.json()
+def getIAMToken(oauthToken: str = str(os.environ.get("YAGPT_OAUTH_TOKEN")), cacheToken: bool = True, cacheFilename: str = ".iamcache.json") -> dict[str, str]:
+    def req() -> dict[str, str]:
+        r = requests.post("https://iam.api.cloud.yandex.net/iam/v1/tokens", json={
+            "yandexPassportOauthToken": oauthToken
+        })
+        return r.json()
+    
+    cwd = pathlib.Path().cwd().absolute()
+    
+    if cacheFilename in os.listdir(cwd):
+        with open(pathlib.Path(cwd, cacheFilename).absolute(), "r") as file:
+            r = json.load(file)
+            
+        if datetime.fromisoformat(r["expiresAt"].rstrip('Z')).replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            return req()
+        else:
+            return r
+    else:
+        r = req()
+        with open(pathlib.Path(cwd, cacheFilename).absolute(), "w") as file:
+            json.dump(r, file)
+        return r
+    
 
 def createRequestBody(model_uri: str, stream: bool, temperature: float, maxTokens: int, messages: list) -> dict:
     """Создает тело для POST запроса к нейронной сети
@@ -56,7 +76,7 @@ class AiSession:
                 
                 generation_segment: str | None = None,
                 
-                systemPrompt: str = "Ты - эксперт по игре Minecraft. Тебя зовут {name}. Ты находишься внутри игры Minecraft. Свой пол определи в зависимости от твоего имени. Все свои сообщения ты пишешь в чат внутри игры Minecraft игроку. Не используй разметку Markdown! Отвечай, словно ты настоящий человек. Ты дружелюбен и приветлив."):
+                systemPrompt: str = "Ты - эксперт по игре Minecraft. Тебя зовут {name}. Ты находишься внутри игры Minecraft. Свой пол определи в зависимости от твоего имени. Все свои сообщения ты пишешь в чат внутри игры Minecraft игроку. Не используй разметку Markdown! Отвечай, словно ты настоящий человек. Ты дружелюбен и приветлив. Кроме вопросов я могу отдавать тебе команды сделать действие. Реагируй на такие сообщения не задавая вопросов. Твоя реакция должна быть покладистой и послушной."):
         """Инициализирует возможность общаться с нейронной сетью YaGPT. Подробнее читайте [здесь](https://yandex.cloud/ru/docs/foundation-models/operations/yandexgpt/create-prompt)
 
         Args:
