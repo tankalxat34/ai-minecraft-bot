@@ -1,5 +1,19 @@
 """Здесь описаны дополнительные методы для работы бота
 """
+import json
+from typing import Callable
+from uu import Error
+
+from click import command
+
+from ai import prompts
+
+try:
+    import ai.session
+    import ai.utils
+except ModuleNotFoundError:
+    pass
+
 
 def findByBestItem(slots: list[dict], fieldByMax: str, fieldByName: str = "") -> dict:
     """Найти лучший предмет в инвентаре по указанной характеристике.
@@ -17,12 +31,59 @@ def findByBestItem(slots: list[dict], fieldByMax: str, fieldByName: str = "") ->
     return item
 
 
-class CommandsComparator:
-    def __init__(self, actionMap: dict[str, function], disableAi: bool = False) -> None:
-        self.actionMap = actionMap
-        self.disableAi = disableAi
-        
 
+class CommandsComparator:
+    def __init__(self, casesMap: dict[str, Callable], aiSession: ai.session.YaGPTSession, disableAi: bool = False) -> None:
+    # def __init__(self, casesMap: dict[str, Callable], aiSession, disableAi: bool = False) -> None:
+        self.casesMap = casesMap
+        self.disableAi = disableAi
+        self.aiSession = aiSession
+        
+    def add(self, command: str, f: Callable):
+        """Добавляет действие в список действий
+
+        Args:
+            command (str): Словесное и краткое название команды (например: `за мной`, `стоп` и т.д.)
+            aiSession (ai.AiSession): Экземпляр сессии с YandexGPT. От имени этой сессии будет осуществляться запрос к нейросети
+            f (function): Функция, вызывающаяся при совпадении команды игрока в чате с заданной здесь командой
+        """
+        self.casesMap[command.lower()] = f
+        
+    def compare(self, commandFromGame: str) -> Callable:
+        """Сравнивает полученную команду в чате игры с одним из заданных в компараторе кейсов. 
+        
+        Сравнение происходит через YandexGPT, поэтому бот должен быть запущен со включенными нейросетевыми возможностями (т.е. без опции `disableAi`).
+
+        Args:
+            commandFromGame (str): Сообщение игрока в чате игры с командой для бота
+
+        Returns:
+            Callable: Функцию, вызывав которую бот начнет выполнять запрашиваемое действие
+        """
+        if commandFromGame.lower() in self.casesMap.keys():
+            return self.casesMap[commandFromGame]
+        
+        if self.disableAi:
+            raise Error("Отключены нейросетевые возможности, сравнение невозможно")
+        
+        commands = ", ".join(self.casesMap.keys())
+        systemPrompt = prompts.Prompts.MultipleComparasion.PROMPT_SYSTEM
+        userPrompt = prompts.Prompts.MultipleComparasion.PROMPT_USER.format(
+            command=commandFromGame,
+            commands=commands
+        )
+        
+        messageHistory = [
+            ai.utils.createMessageBody(systemPrompt, ai.utils.ROLES.SYSTEM),
+            ai.utils.createMessageBody(userPrompt, ai.utils.ROLES.USER),
+        ]
+        
+        response = self.aiSession.ask(userPrompt, temperature=0, maxTokens=500, messages=messageHistory).lower()
+        
+        return self.casesMap[response]
+
+        
+        
 
 class BotActions:
     def __init__(self, bot, movements):
@@ -94,12 +155,11 @@ class BotInventory:
     
     
 if __name__ == "__main__":
-    from javascript import require, On
-    import json
-    
-    mcData = require("minecraft-data")("1.20.4")
-    # foods = json.loads(json.dumps(mcData.foods))
-    foods = (json.dumps(mcData.foods))
-    print(foods)
-    
-    
+    comparator = CommandsComparator({
+        "стоп": lambda x: print("Вызвана функция `стоп`"),
+        "за мной": lambda x: print("Вызвана функция `за мной`"),
+        "найди алмазы": lambda x: print("Вызвана функция `найди алмазы`"),
+        "добудь дерево": lambda x: print("Вызвана функция `добудь дерево`"),
+    }, None) # type: ignore
+
+    comparator.compare("стой")

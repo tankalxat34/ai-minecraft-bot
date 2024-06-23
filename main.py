@@ -5,7 +5,7 @@ from javascript import require, On
 from utils.dotenvLoader import loadDotEnv
 from utils import cli
 from utils.botUtils import BotActions, BotInventory
-from ai import ai
+import ai.utils, ai.session
 
 loadDotEnv()
 
@@ -33,9 +33,9 @@ botInventory = BotInventory(bot, mcData)
 
 
 if not CMD.getOption("disableAi"):
-    aisession = ai.AiSession(
+    aisession = ai.session.YaGPTSession(
         folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
-        iam_token=ai.getIAMToken()["iamToken"],
+        iam_token=ai.utils.getIAMToken()["iamToken"],
         name=USERNAME,
         temperature=0.1,
         maxTokens=1000,

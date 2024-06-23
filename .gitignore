@@ -56,3 +56,4 @@ python-env-tools/**
 venv
 test*
 .iamcache.json
+__init__.py
