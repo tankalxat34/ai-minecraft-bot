@@ -1,5 +1,6 @@
 """Здесь описаны дополнительные методы для работы бота
 """
+import difflib
 import json
 from typing import Callable
 from uu import Error
@@ -60,27 +61,21 @@ class CommandsComparator:
         Returns:
             Callable: Функцию, вызывав которую бот начнет выполнять запрашиваемое действие
         """
-        if commandFromGame.lower() in self.casesMap.keys():
-            return self.casesMap[commandFromGame]
+        userCommand = commandFromGame.lower()
+        if userCommand in self.casesMap.keys():
+            return self.casesMap[userCommand]
         
         if self.disableAi:
             raise Error("Отключены нейросетевые возможности, сравнение невозможно")
         
-        commands = ", ".join(self.casesMap.keys())
-        systemPrompt = prompts.Prompts.MultipleComparasion.PROMPT_SYSTEM
-        userPrompt = prompts.Prompts.MultipleComparasion.PROMPT_USER.format(
-            command=commandFromGame,
-            commands=commands
-        )
+        commands = list(self.casesMap.keys())
+        matches = difflib.get_close_matches(userCommand, commands, n=1, cutoff=0.65)
         
-        messageHistory = [
-            ai.utils.createMessageBody(systemPrompt, ai.utils.ROLES.SYSTEM),
-            ai.utils.createMessageBody(userPrompt, ai.utils.ROLES.USER),
-        ]
-        
-        response = self.aiSession.ask(userPrompt, temperature=0, maxTokens=500, messages=messageHistory).lower()
-        
-        return self.casesMap[response]
+        if matches and matches[0] in commands:
+            return self.casesMap[matches[0]]
+        else:
+            return lambda: "Ответ от нейросети"
+            # return lambda: self.aiSession.ask(userCommand)
 
         
         

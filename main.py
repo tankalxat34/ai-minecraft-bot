@@ -33,7 +33,7 @@ botInventory = BotInventory(bot, mcData)
 
 
 if not CMD.getOption("disableAi"):
-    aisession = ai.session.YaGPTSession(
+    yagpt = ai.session.YaGPTSession(
         folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
         iam_token=ai.utils.getIAMToken()["iamToken"],
         name=USERNAME,
@@ -88,7 +88,7 @@ def spawnHandler(*args):
             bot.chat("При запуске бота Вы отключили запросы к YandexGPT, указав необязательную опцию --disableAi.\n\nПожалуйста, перезапустите бота без использования этой опции")
         else:
             try:
-                r = aisession.ask(message)
+                r = yagpt.ask(message)
                 bot.whisper(username, f"{r}")
             except Exception as e:
                 print(e)

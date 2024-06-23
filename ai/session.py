@@ -25,7 +25,7 @@ class YaGPTSession:
 
                     generation_segment: str | None = None,
 
-                    systemPrompt: str = prompts.Prompts.SYSTEM_PROMPT
+                    systemPrompt: str = prompts.Prompts.SYSTEM_PROMPT_2
                 ):
         """Клиент для общения с нейронной сетью YaGPT. Подробнее читайте [здесь](https://yandex.cloud/ru/docs/foundation-models/operations/yandexgpt/create-prompt)
 
@@ -57,6 +57,8 @@ class YaGPTSession:
         self.systemPrompt = systemPrompt.format(name=self.name)
         self.messages = [self._createMessageBody(self.systemPrompt, "system")]
         self.completion = None
+        
+        self.DEFAULT_MESSAGE_HISTORY = [self._createMessageBody(self.systemPrompt, "system")]
 
     def _appendMessage(self, text: str, role: str = "user") -> list[dict]:
         """Сохраняет сообщение в историю чата
@@ -104,7 +106,7 @@ class YaGPTSession:
         """Очищает историю сообщений
         """
         self.messages.clear()
-        self._appendMessage(*self._createSystemMessageBody())
+        self.messages.append(self._createSystemMessageBody())
 
     def ask(self, messageText: str, typeUser: str = "user", useChatHistory: bool = True, **kwargs) -> str:
         """Выполнить запрос к нейросети YaGPT
