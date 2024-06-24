@@ -1,6 +1,7 @@
 """Это демо-режим общения с YandexGPT через консоль
 """
 
+import json
 from typing import Any, Callable
 import os
 
@@ -32,15 +33,22 @@ def action_followMe():
 def action_stop():
     pass
 
+# инициализация действий бота
+BOT_ACTIONS = {
+    "стоп": lambda: action_stop(),
+    "за мной": lambda: action_followMe(),
+}
 
 # инициализация беседы с YandexGPT
 yagpt = ai.session.YaGPTSession(
     folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
     iam_token=ai.utils.getIAMToken()["iamToken"],
-    name="Alice",
     temperature=0.1,
     maxTokens=1000,
-    generation_segment="latest"
+    formatMapForSystemPrompt={
+        "name": "Alice",
+        "commands": ", ".join(list(BOT_ACTIONS.keys()))
+    }
 )
 
 # команды для выполнения методов YaGPTSession (кроме `.ask()`)
@@ -50,10 +58,7 @@ DEFAULT_COMMANDS: dict[str, Callable[[], tuple[Any, str]]] = { # type: ignore
 }
 
 # создание компаратора бота с возможными командами
-comparator = CommandsComparator({
-    "стоп": lambda: action_stop(),
-    "за мной": lambda: action_followMe(),
-}, aiSession=yagpt)
+comparator = CommandsComparator(BOT_ACTIONS, aiSession=yagpt)
 
 
 
@@ -66,4 +71,3 @@ while True:
         result = comparator.compare(prompt)()
         if type(result).__name__ == "str":
             print(result)
-        

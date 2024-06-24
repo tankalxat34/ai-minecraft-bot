@@ -36,7 +36,6 @@ if not CMD.getOption("disableAi"):
     yagpt = ai.session.YaGPTSession(
         folder_id=os.environ.get("YAGPT_FOLDERID"), # type: ignore
         iam_token=ai.utils.getIAMToken()["iamToken"],
-        name=USERNAME,
         temperature=0.1,
         maxTokens=1000,
         generation_segment="latest"

@@ -1,5 +1,7 @@
 """Класс для работы с YandexGPT
 """
+from typing import Any
+from requests import Response
 import requests
 
 from ai import prompts
@@ -15,7 +17,6 @@ class YaGPTSession:
                     folder_id: str,
                     iam_token: str,
                     # имя бота в игре
-                    name: str,
                     model: str = "yandexgpt",
                     data_logging_enabled: bool = False,
 
@@ -25,14 +26,14 @@ class YaGPTSession:
 
                     generation_segment: str | None = None,
 
-                    systemPrompt: str = prompts.Prompts.SYSTEM_PROMPT_2
+                    systemPrompt: str = prompts.Prompts.SYSTEM_PROMPT_2,
+                    formatMapForSystemPrompt: dict[str, str] = {}
                 ):
         """Клиент для общения с нейронной сетью YaGPT. Подробнее читайте [здесь](https://yandex.cloud/ru/docs/foundation-models/operations/yandexgpt/create-prompt)
 
         Args:
             folder_id (str): идентификатор каталога, на который у вашего аккаунта есть роль ai.languageModels.user или выше.
             iam_token (str): IAM-токен, полученный перед началом работы.
-            name (str): Имя бота в игре.
             model (str, optional): Наименование языковой модели. Defaults to "yandexgpt".
             data_logging_enabled (bool, optional): Определяет, будут ли сообщения логироваться на строне Яндекса. Defaults to False.
             stream (bool, optional): включает потоковую передачу частично сгенерированного текста. Принимает значения true или false. Defaults to False.
@@ -40,6 +41,7 @@ class YaGPTSession:
             maxTokens (int, optional): устанавливает ограничение на выход модели в токенах. Максимальное число токенов генерации зависит от модели. Подробнее см. в разделе Квоты и лимиты в Yandex Foundation Models. Defaults to 1000.
             generation_segment (str | None, optional): Сегменты `/latest`, `/rc` и `/deprecated` указывают версию модели. Defaults to None.
             systemPrompt (str, optional): позволяет задать контекст запроса и определить поведение модели.
+            formatMapForSystemPrompt (dict[str, str], optional): Словарь с дополнительными значениями для форматирования промпта. Позволяет на этапе инициализации сессии создать корректный системный промпт.
         """
 
         self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
@@ -52,13 +54,30 @@ class YaGPTSession:
         self.temperature: float = temperature
         self.maxTokens: int = maxTokens
         self.generation_segment: str | None = generation_segment
-        self.name: str = name
-
-        self.systemPrompt = systemPrompt.format(name=self.name)
+        
+        self.systemPrompt = systemPrompt
+        
+        for k in formatMapForSystemPrompt.keys():
+            try:
+                self.systemPrompt = self.systemPrompt.format(**{f"{k}": formatMapForSystemPrompt[k]})
+            except Exception:
+                pass
+        
+        
         self.messages = [self._createMessageBody(self.systemPrompt, "system")]
         self.completion = None
         
         self.DEFAULT_MESSAGE_HISTORY = [self._createMessageBody(self.systemPrompt, "system")]
+        """Возвращает массив с одним `system` сообщением.
+        ```
+        [
+            {
+                "role": "system",
+                "text:" "Это системный промпт"
+            }
+        ]
+        ```
+        """
 
     def _appendMessage(self, text: str, role: str = "user") -> list[dict]:
         """Сохраняет сообщение в историю чата
@@ -102,6 +121,22 @@ class YaGPTSession:
         """
         return self._createMessageBody(self.systemPrompt, "system")
 
+    def _post(self, request_body: dict[str, Any]) -> requests.Response:
+        return requests.post(self.api_url, json=request_body, headers={
+            "Authorization": f"Bearer {self.iam_token}",
+            "Content-Type": "application/json",
+            "x-folder-id": f"{self.folder_id}",
+            "x-data-logging-enabled": f"{self.data_logging_enabled}".lower()
+        })
+        
+    def _responseValidation(self, r: Response):
+        if r.status_code:
+            response_message: str = r.json()["result"]["alternatives"][0]["message"]["text"]
+            self._appendMessage(response_message, "assistant")
+            return response_message
+        else:
+            return "!Ошибка в языковой модели"
+
     def clearChatHistory(self):
         """Очищает историю сообщений
         """
@@ -115,7 +150,7 @@ class YaGPTSession:
             messageText (str): Текст сообщения для выполнения запроса
             typeUser (str, optional): Тип пользователя. Defaults to "user".
             useChatHistory (bool, optional): Сделать запрос с учетом истории предыдущих сообщений. Если `False` - отправленное сообщение будет считаться первым в диалоге. Defaults to True.
-            kwargs (dict[str, Any], optional): Необязательно. Ручное переопределение тела запроса. Можно переопределить температуру, макс. количество токенов и т.д. для конкретного запроса.
+            kwargs (dict[str, Any], optional): Необязательно. Ручное переопределение тела запроса. Можно переопределить такие параметры, как `temperature`, `maxTokens`, `messages` и т.д. для конкретного запроса.
 
         Returns:
             str: Строка с ответом нейронной сети
@@ -126,17 +161,33 @@ class YaGPTSession:
         # переопределение тела запроса
         for kwarg in kwargs.keys():
             request_body[kwarg] = kwargs[kwarg]
+            
+        print(f"{request_body =}")
 
-        r = requests.post(self.api_url, json=request_body, headers={
-            "Authorization": f"Bearer {self.iam_token}",
-            "Content-Type": "application/json",
-            "x-folder-id": f"{self.folder_id}",
-            "x-data-logging-enabled": f"{self.data_logging_enabled}".lower()
-        })
+        r = self._post(request_body)
+        return self._responseValidation(r)
+        
 
-        if r.status_code:
-            response_message = r.json()["result"]["alternatives"][0]["message"]["text"]
-            self._appendMessage(response_message, "assistant")
-            return response_message
-        else:
-            return "!Ошибка в языковой модели"
+    def customAsk(
+            self,
+            messages: list[dict[str, str]],
+            **kwargs
+        ) -> str:
+        """Выполнить кастомный запрос к нейросети YaGPT
+
+        Args:
+            kwargs (dict[str, Any], optional): Необязательно. Ручное переопределение тела запроса. Можно переопределить такие параметры, как `temperature`, `maxTokens`, `messages` и т.д. для конкретного запроса.
+
+        Returns:
+            str: Строка с ответом нейронной сети
+        """
+        request_body: dict = createRequestBody(
+            model_uri=kwargs["model_uri"] if "model_uri" in kwargs.keys() else self.model_uri,
+            stream=kwargs["stream"] if "stream" in kwargs.keys() else self.stream,
+            temperature=kwargs["temperature"] if "temperature" in kwargs.keys() else self.temperature,
+            maxTokens=kwargs["maxTokens"] if "maxTokens" in kwargs.keys() else self.maxTokens,
+            messages=messages
+        )
+        
+        r = self._post(request_body)
+        return self._responseValidation(r)

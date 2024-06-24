@@ -8,6 +8,7 @@ from uu import Error
 from click import command
 
 from ai import prompts
+from ai.utils import createMessageBody
 
 try:
     import ai.session
@@ -69,13 +70,36 @@ class CommandsComparator:
             raise Error("Отключены нейросетевые возможности, сравнение невозможно")
         
         commands = list(self.casesMap.keys())
-        matches = difflib.get_close_matches(userCommand, commands, n=1, cutoff=0.65)
+        strCommands = f'[{", ".join(commands)}]'
+        # matches = difflib.get_close_matches(userCommand, commands, n=1, cutoff=0.65)
         
-        if matches and matches[0] in commands:
-            return self.casesMap[matches[0]]
-        else:
-            return lambda: "Ответ от нейросети"
-            # return lambda: self.aiSession.ask(userCommand)
+        # if matches and matches[0] in commands:
+        #     return self.casesMap[matches[0]]
+        # else:
+        formattedSystemPrompt = prompts.Prompts.SYSTEM_PROMPT_2.replace("{commands}", strCommands)
+        messages = [
+            createMessageBody(formattedSystemPrompt, "system"),
+            createMessageBody(userCommand, "user"),
+        ]
+        print(messages)
+        aiResponse: dict[str, str] = json.loads(self.aiSession.customAsk(messages, temperature=0.35))
+        """Структура вида:
+        ```
+        {
+            "result": слово_из_перечня_либо_null, 
+            "creative": твой_креативный_ответ_либо_null
+        }
+        ```
+        """
+        
+        # возвращаем креативный ответ всегда, а кейс выполняем тут же, если это возможно
+        print(aiResponse)
+        try:
+            print("Выполнил кейс", aiResponse["result"])
+            self.casesMap[aiResponse["result"]]()
+        except KeyError:
+            pass
+        return lambda: aiResponse["creative"]
 
         
         

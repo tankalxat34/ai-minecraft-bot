@@ -66,7 +66,7 @@ def createRequestBody(model_uri: str, stream: bool, temperature: float, maxToken
         "messages": messages
     }
 
-def createMessageBody(text: str, role: str = "user") -> dict:
+def createMessageBody(text: str, role: str = "user") -> dict[str, str]:
     return {
         "role": role,
         "text": text
