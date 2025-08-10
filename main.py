@@ -11,16 +11,25 @@ import utils.structures as s
 import utils.actions as a
 from utils.model_settings import MODEL_SETTINGS
 
+from utils.model_api import Model
+
 # инициализация
 ## chatgpt
 
-client = OpenAI(
+with open(".\\prompts\\minecraft.md") as prompt:
+    system_prompt = prompt.read()
+
+model = Model(
+    model="openai/gpt-oss-20b",
     base_url="http://localhost:1234/v1",
-    api_key=os.environ["API_TOKEN"],
+    system_prompt=system_prompt
 )
 
-with open(".\\prompts\\minecraft.md") as prompt:
-    chat = s.Chat(prompt.read())
+# client = OpenAI(
+#     base_url="http://localhost:1234/v1",
+#     api_key=os.environ["API_TOKEN"],
+# )
+
 
 ## minecraft bot
 mineflayer = require("mineflayer")
@@ -44,6 +53,15 @@ movements = pathfinder.Movements(bot, mcData)
 #     **MODEL_SETTINGS
 # )
 
+def excHandler(f: callable):
+    def wrapper():
+        try:
+            r = f()
+            return r
+        except Exception as e:
+            return bot.chat(f"{e}")
+    return wrapper
+
 @On(bot, "spawn")
 def spawn(*args):
     a.log("OK")
@@ -51,29 +69,6 @@ def spawn(*args):
 
 @On(bot, "whisper")
 def whisper(this, username: str, message: str, *args):
-    a.log("OK")
-    bot.whisper(username, message)
-
-
-
-    # @On(bot, "chat")
-    # def chatHandler(this, username: str, message: str, *args):
-    #     bot.whisper(username, f"Напиши мне командой `/tell %username% <твое_сообщение>` и тогда я смогу помочь!")
-
-    # @On(bot, "whisper")
-    # def whisperHandler(this, username: str, message: str, *args):
-    #     chat.push(s.Role.USER, message)
-
-    #     a.log("Получено сообщение", message)
-
-    #     completion = client.chat.completions.create(
-    #         model="openai/gpt-oss-20b",
-    #         messages=chat.chat,
-    #         **MODEL_SETTINGS
-    #     )
-
-    #     a.log("Сформирован ответ", completion.choices[::-1][0].message.content)
-
-    #     chat.push(completion.choices[::-1][0].message.role, completion.choices[::-1][0].message.content)
-    #     bot.whisper(username, f"{chat.last()["content"]}")
-        
+    bot.whisper(username, "Думаю над ответом...")
+    response = model.ask(message)
+    bot.whisper(username, response)
